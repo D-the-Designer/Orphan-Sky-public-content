@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEAD CARRIER — An Interactive Incident on the Ansible Rail</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --orange:#FF6A00;
+    --coal:#0D0D0D;
+    --void:#05070C;
+    --navy:#0A1220;
+    --paper:#C8C8BF;
+    --dim:#6E6E66;
+    --teal:#2E8C8C;
+    --hazard:#E8B400;
+    --blood:#B03020;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--void);
+    color:var(--paper);
+    font-family:"IBM Plex Mono","Courier New",monospace;
+    font-size:15px;
+    line-height:1.55;
+    display:flex;flex-direction:column;height:100dvh;
+  }
+  /* Signage plate — wordmark per CSL-VIS-01, untouched by any effect */
+  #plate{
+    background:#E9E9E2;color:var(--coal);
+    padding:10px 16px 8px;border-bottom:6px solid var(--coal);
+    position:relative;flex:none;
+  }
+  #plate .stripe{
+    position:absolute;left:0;right:0;bottom:-6px;height:6px;
+    background:repeating-linear-gradient(45deg,var(--coal) 0 14px,var(--orange) 14px 28px);
+  }
+  #plate .mark{font-weight:700;font-size:22px}
+  #plate .mark .co{color:var(--orange)}
+  #plate .mark .mod{color:var(--coal)}
+  #plate .sub{font-size:10px;letter-spacing:.18em;text-transform:uppercase;margin-top:2px}
+  #plate .docid{position:absolute;top:10px;right:16px;text-align:right;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+  #plate .docid b{display:block;font-size:13px}
+  #status{
+    flex:none;background:var(--coal);color:var(--paper);
+    display:flex;justify-content:space-between;gap:12px;
+    padding:4px 16px;font-size:12px;letter-spacing:.06em;
+    border-bottom:1px solid #1c2a40;
+  }
+  #status .loc{color:var(--orange);font-weight:700;text-transform:uppercase}
+  #st-o2.low{color:var(--blood);font-weight:700}
+  #st-car .on{color:var(--orange)}
+  #st-car .off{color:#333}
+  #screen{flex:1;overflow-y:auto;padding:18px 16px 12px;position:relative}
+  #screen::after{
+    content:"";position:fixed;inset:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55) 100%),
+      repeating-linear-gradient(0deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px);
+  }
+  .block{max-width:72ch;margin:0 auto 1em;white-space:pre-wrap;word-wrap:break-word}
+  .echo{color:var(--dim)}
+  .sys{color:var(--teal)}
+  .warn{color:var(--hazard)}
+  .alert{color:var(--orange);font-weight:700}
+  .dead{color:var(--blood);font-weight:700}
+  .room{color:var(--orange);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+  .whisper{color:#8a93a8;font-style:italic}
+  .wm .co{color:var(--orange);font-weight:700}
+  .wm .mod{color:var(--paper);font-weight:700}
+  @media (prefers-reduced-motion:no-preference){
+    .block{animation:fade .12s ease-out}
+    @keyframes fade{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
+    body.attuned #screen{animation:breathe 7s ease-in-out infinite}
+    @keyframes breathe{0%,100%{filter:brightness(1)}50%{filter:brightness(.92)}}
+  }
+  #inputrow{
+    flex:none;display:flex;align-items:center;gap:8px;
+    padding:10px 16px 14px;border-top:1px solid #1c2a40;background:var(--void);
+  }
+  #inputrow .caret{color:var(--orange);font-weight:700}
+  #cmd{flex:1;background:transparent;border:none;outline:none;color:var(--paper);font:inherit;font-size:15px;caret-color:var(--orange)}
+  @media (max-width:480px){
+    body{font-size:14px}
+    #plate .mark{font-size:18px}
+    #plate .docid{display:none}
+    #status{flex-wrap:wrap}
+  }
+</style>
+</head>
+<body>
+
+<header id="plate">
+  <div class="mark"><span class="co">Co</span><span class="mod">Modularism</span></div>
+  <div class="sub">Dead Carrier · An Interactive Incident · Ansible Relay Network Ops</div>
+  <div class="docid">INCIDENT <b>IR-26-DARK</b>CLASS: RESTRICTED</div>
+  <div class="stripe"></div>
+</header>
+
+<div id="status">
+  <span class="loc" id="st-loc">RAIL SLED</span>
+  <span id="st-o2"></span>
+  <span id="st-car"></span>
+  <span><span id="st-score">Score: 0</span> · <span id="st-moves">Moves: 0</span></span>
+</div>
+
+<main id="screen" aria-live="polite"></main>
+
+<div id="inputrow">
+  <span class="caret">&gt;</span>
+  <input id="cmd" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Command input" placeholder="type a command — try HELP">
+</div>
+
+<script>
+/* ==================================================================
+   DEAD CARRIER — an interactive incident on the Ansible rail
+   Relay 26 went dark eleven shifts ago. You are the one they sent.
+   Doctrine: One connection point. Sacrificial containment.
+   ================================================================== */
+
+const WM = '<span class="wm"><span class="co">Co</span><span class="mod">Modularism</span></span>';
+
+const $screen=document.getElementById('screen'),$cmd=document.getElementById('cmd');
+const $loc=document.getElementById('st-loc'),$score=document.getElementById('st-score');
+const $moves=document.getElementById('st-moves'),$o2=document.getElementById('st-o2');
+const $car=document.getElementById('st-car');
+
+function print(html,cls=''){
+  const d=document.createElement('div');
+  d.className='block'+(cls?' '+cls:'');
+  d.innerHTML=html;
+  $screen.appendChild(d);
+  $screen.scrollTop=$screen.scrollHeight;
+}
+
+/* ---------------- state ---------------- */
+const S={
+  room:'sled',score:0,moves:0,over:false,won:false,
+  o2:12,O2MAX:12,
+  carrier:0,answers:0,touched:0,
+  lampHave:false,lampOn:false,lampJuice:22,
+  power:false,mainTripped:true,arrayOn:true,
+  readOrder:false,readLog:false,lockerOpen:false,drawerOpen:false,
+  hasTag:false,hasCutter:false,hasCard:false,
+  tagged:false,severed:false,testDone:false,reportSent:false,
+  foundVoss:false,tapped:false,listens:0,
+  awarded:new Set(),
+};
+
+const VACUUM=new Set(['gantry','mast']);
+const NEEDLAMP=new Set(['crawl','core']);   // dark regardless of power
+const INTERIOR=new Set(['airlock','deck','comms','power','crawl','core']);
+
+function award(k,p,m){
+  if(S.awarded.has(k))return;
+  S.awarded.add(k);S.score+=p;
+  if(m)print('<span class="sys">[+'+p+' — '+m+']</span>');
+  bar();
+}
+function dread(n){
+  S.carrier=Math.min(8,S.carrier+n);
+  document.body.classList.toggle('attuned',S.carrier>=5);
+  bar();
+}
+function bar(){
+  $loc.textContent=ROOMS[S.room].name;
+  $score.textContent='Score: '+S.score;
+  $moves.textContent='Moves: '+S.moves;
+  if(VACUUM.has(S.room)){
+    $o2.textContent='O₂: '+'▮'.repeat(S.o2)+'▯'.repeat(S.O2MAX-S.o2);
+    $o2.className=S.o2<=4?'low':'';
+  } else $o2.textContent='';
+  let c='';
+  for(let i=0;i<8;i++)c+=i<S.carrier?'<span class="on">▮</span>':'<span class="off">▯</span>';
+  $car.innerHTML='CARRIER: '+c;
+}
+function lit(){
+  if(VACUUM.has(S.room))return true;            // suit lamp ring / starlight
+  if(NEEDLAMP.has(S.room))return S.lampOn;
+  return true;                                   // glow strips elsewhere
+}
+
+/* ---------------- rooms ---------------- */
+const ROOMS={
+  sled:{
+    name:'RAIL SLED',
+    desc:()=>`The cab of your rail sled, clamped to the maintenance rail of
+ANSIBLE RELAY 26. Cabin pressure good. Heater arguing with the
+cold and losing politely.
+
+Through the canopy: the relay — a kilometer of mast, dish, and
+girder strung on the rail like a vertebra on a nerve. Every
+window dark. Eleven shifts dark.
+
+The DISPATCH ORDER glows on the console. The radio carries only
+rail static; Kepler Yard is four light-hours behind you and the
+ansible here is, of course, the problem.
+
+The hatch opens NORTH onto the exterior gantry. Your suit is
+sealed and green across the board.`,
+    exits:{north:'gantry',n:'gantry',out:'gantry'},
+  },
+  gantry:{
+    name:'EXTERIOR GANTRY',
+    desc:()=>`Hard vacuum. The gantry runs along the relay's spine, handholds
+every meter, your boots clipped to the rail the way every
+railwalker learns before they learn anything else.
+
+Above you the main array spreads against the stars — receivers
+and projectors in their hundreds, motionless. Relays are never
+motionless. They hum. They sing. They keep the pattern locked.
+
+This one is holding its breath.
+
+The AIRLOCK is NORTH. The array MAST ladder leads UP. Your sled
+is SOUTH.${S.foundVoss?'':'\n\nFar up the mast, something pale is tethered to the topmost\nplatform. It does not move. Tethered things in vacuum never do.'}`,
+    exits:{north:'airlock',n:'airlock',south:'sled',s:'sled',up:'mast',u:'mast'},
+  },
+  mast:{
+    name:'ARRAY MAST — TOP PLATFORM',
+    desc:()=>{
+      if(!S.foundVoss) return `You haul yourself onto the top platform and your headlamp finds
+him.
+
+KEEPER IMRE VOSS. Suit intact, tether doctrine-perfect, dual
+clipped. His glove is closed on the MANUAL PHASE CLAMP — the
+hand-crank of last resort that holds the array's alignment when
+everything else has let go.
+
+His faceplate is frosted from the inside. He has been here eleven
+shifts, holding the line by hand, and he is not letting go now.
+
+The ladder leads DOWN.`;
+      return `The top platform. Voss keeps his post, glove closed on the phase
+clamp. The stars do not look at him. You try to manage the same.
+
+The ladder leads DOWN.`;
+    },
+    exits:{down:'gantry',d:'gantry'},
+  },
+  airlock:{
+    name:'AIRLOCK',
+    desc:()=>`The airlock, cycled and holding. A suit-recharge port juts from
+the bulkhead — your O₂ tops off automatically each time you pass
+through. Procedure loves you even here.
+
+Scratched into the inner door paint, recent, hurried:
+
+   DON'T ANSWER IT
+
+Inner door NORTH to the keeper's deck. Outer door SOUTH to the
+gantry.`,
+    exits:{north:'deck',n:'deck',south:'gantry',s:'gantry'},
+  },
+  deck:{
+    name:"KEEPER'S DECK",
+    desc:()=>`The keeper's deck, lit ${S.power?'properly now, which somehow makes it worse —\nevery abandoned thing in it has a shadow':'only by emergency glow strips, a green\ndusk that makes every shape a guess'}.
+
+A bunk, made. A meal tray, not finished. Tea in a zero-g bulb
+gone the color of old varnish. Voss left mid-bite and never came
+back for it.
+
+The station LOGBOOK lies open on the desk beside a DRAWER. A
+charging cradle is bolted to the wall${S.lampHave?'':' with a WORKLAMP seated in it'}.
+
+The AIRLOCK is SOUTH. COMMS is EAST. POWER is WEST. A crawlway
+hatch leads NORTH into the spine.`,
+    exits:{south:'airlock',s:'airlock',east:'comms',e:'comms',west:'power',w:'power',north:'crawl',n:'crawl'},
+  },
+  comms:{
+    name:'COMMS ROOM',
+    desc:()=>{
+      let t=`The comms room. Racks of receivers, a patch bay dense as a loom,
+and the REPEATER CONSOLE — the bench where keepers run the old
+experiment: send a pulse down the anomaly, listen for your own
+repeat. If the repeater picks up the repeat, the anomaly is real.
+If not, our theory collapses.
+
+A HEADSET hangs on its hook, cable neatly coiled. Voss was tidy.
+
+`;
+      if(!S.power) t+=`Every rack is dark. Nothing here will speak until main power is
+restored from the POWER room.`;
+      else if(S.severed) t+=`The racks are lit but the main carrier rack is dark and stays
+dark. The silence in here is clean now. Earned. The backup
+WHISKER ANTENNA — slow-light radio, fully independent — shows
+READY.`;
+      else t+=`The racks are lit, and one channel is live that should not be:
+the LOOP. A carrier where no carrier should ride, repeating.
+You could LISTEN. The scratched door downstairs had an opinion
+about that.
+
+The backup WHISKER ANTENNA shows BLOCKED — the main array is
+swallowing its carrier.`;
+      return t+`
+
+The keeper's deck is WEST.`;
+    },
+    exits:{west:'deck',w:'deck'},
+  },
+  power:{
+    name:'POWER ROOM',
+    desc:()=>`The power room, close and cold, smelling of ozone's ghost. The
+reactor idles behind glass at standby — alive, obedient, waiting
+to be asked correctly.
+
+The BREAKER PANEL dominates one wall:
+
+   MAIN BUS ....... ${S.mainTripped?'<span class="warn">TRIPPED</span>':'<span class="sys">CLOSED</span>'}
+   ARRAY FEED ..... ${S.arrayOn?'ON':'OFF'}
+
+Stenciled above it, the oldest prayer in the trade:
+SHED LOADS BEFORE RESET.
+
+A steel tool LOCKER stands in the corner${S.lockerOpen?', open':''}.
+
+The keeper's deck is EAST.`,
+    exits:{east:'deck',e:'deck'},
+  },
+  crawl:{
+    name:'SPINE CRAWLWAY',
+    desc:()=>{
+      if(!lit())return darkText();
+      let t=`The crawlway threads the relay's spine, a tube of conduit and
+frost. Your lamp beam crawls ahead of you and the dark closes in
+behind like water.
+
+The conduit here is labeled in two hands: Co-Op stencils, crisp
+and dated — and beneath them, where the cladding has peeled,
+older markings. Not letters. Not numbers. The Nadiran did not
+label things for us.
+
+`;
+      if(S.tapped) t+=`You are very aware of the pipe you tapped, and of what tapped
+back, and of the arithmetic of the delay.
+
+`;
+      t+=`The hatch back to the deck is SOUTH. Ahead, NORTH, the crawlway
+ends at the CORE CHAMBER. The cold is coming from there.`;
+      return t;
+    },
+    exits:{south:'deck',s:'deck',north:'core',n:'core'},
+  },
+  core:{
+    name:'NADIRAN CORE CHAMBER',
+    desc:()=>{
+      if(!lit())return darkText();
+      return `The core chamber. Your lamp does what it can, which is not
+enough, because the room does not entirely agree about its own
+shape. The walls meet at angles your eye keeps refiling. This is
+the localized misalignment the manuals mention in one careful
+sentence and never mention again.
+
+At the center: the LENSING CORE. Nadiran. Old in a way that has
+nothing to do with years. It is matte and lightless and your lamp
+beam bends — fractionally, measurably — going past it.
+
+Per SafMod one-connection-point doctrine, exactly one UMBILICAL
+joins the core to the relay: power, data, and everything else
+down a single sacrificial trunk, made to be cut.
+
+The frost on the deck plates is disturbed. Boot prints. Voss came
+here too, before he chose the mast instead.
+
+The crawlway is SOUTH.`;
+    },
+    exits:{south:'crawl',s:'crawl'},
+  },
+};
+
+function darkText(){
+  dread(0);
+  const lines=[
+   `It is pitch dark. Your glow strips end at the hatch behind you.
+
+Something in here is breathing in time with you. You hope very
+much that it is you, echoed. You can only go back SOUTH.`,
+   `It is pitch dark. The cold has texture. You can only go back
+SOUTH, and you should.`];
+  return lines[Math.min(1,S.carrier>=4?1:0)];
+}
+
+/* ---------------- intro ---------------- */
+function intro(){
+  print(`<span class="alert">ANSIBLE RELAY 26 — RAIL SEGMENT K9</span>
+<span class="sys">CYCLE 3127.19 · STATUS: DARK, 11 SHIFTS · KEEPER: NO CONTACT</span>
+
+You are an ItSyn relay technician, Ansible Relay Network
+Operations Division. The patch on your shoulder says you keep the
+signals moving. The dispatch in your console says Relay 26 stopped
+moving them, and stopped answering, and that Keeper Imre Voss has
+missed eleven consecutive check-ins.
+
+The relays are old. Some parts are Nadiran.
+Some parts don't like being touched.
+
+You rode the rail four days to get here. The last thing dispatch
+said before you passed out of real-time range:
+
+<span class="whisper">"Whatever you find — follow the doctrine. The doctrine is not
+for the relay's protection, kid."
+                                        — T. Tenzin, Dock Chief</span>
+
+<span class="sys">Type HELP for commands. Type LOOK to look around.</span>`);
+  print(roomText());
+}
+
+function roomText(){return '<span class="room">'+ROOMS[S.room].name+'</span>\n'+ROOMS[S.room].desc();}
+
+/* ---------------- O2 / lamp / ambience ticks ---------------- */
+function tick(){
+  S.moves++;
+  // lamp
+  if(S.lampOn){
+    S.lampJuice--;
+    if(S.lampJuice===6)print('<span class="warn">Your worklamp flickers — battery low.</span>');
+    if(S.lampJuice<=0){S.lampOn=false;print('<span class="warn">Your worklamp dies. The dark arrives like it was waiting.</span>');}
+  }
+  // O2
+  if(VACUUM.has(S.room)&&!S.over){
+    S.o2--;
+    if(S.o2===4)print('<span class="warn">SUIT: O₂ at one-third. Plan your route back.</span>');
+    if(S.o2===2)print('<span class="dead">SUIT: O₂ CRITICAL. Get to a recharge port NOW.</span>');
+    if(S.o2<=0){die(`Your regulator clicks against an empty bottle, twice, politely.
+
+The relay watches you with its hundred dark dishes. The stars are
+very clean out here, and very patient, and the last thing you
+register is that the array has begun — softly, at last — to hum.`);return false;}
+  }
+  // ambience
+  if(!S.over&&Math.random()<0.18){
+    const a=ambience();if(a)print('<span class="whisper">'+a+'</span>');
+  }
+  return true;
+}
+function ambience(){
+  const r=S.room,c=S.carrier;
+  const pool=[];
+  if(INTERIOR.has(r)&&!S.severed){
+    pool.push('Somewhere in the racks, a relay coil clicks once. Just once.');
+    pool.push('The glow strips dim, recover, apologize for nothing.');
+    if(c>=3)pool.push('You hear the loop through two closed doors. You should not be\nable to hear the loop through two closed doors.');
+    if(c>=5)pool.push('A sound like a checklist being read in an empty room, too far\noff to make out the items. Your items, you suspect.');
+  }
+  if(VACUUM.has(r)){
+    pool.push('Your tether slides along the rail with a feel like a held note.');
+    if(c>=3)pool.push('In your peripheral vision the array dishes are all, very\nslightly, facing you. When you look, they are not.');
+  }
+  if(S.severed)return null;
+  return pool.length?pool[Math.floor(Math.random()*pool.length)]:null;
+}
+
+/* ---------------- death / endings ---------------- */
+function die(text){
+  S.over=true;
+  print('<span class="dead">'+text+'</span>');
+  print(`<span class="dead">      ═══ YOU HAVE LOST PRESSURE, PERSPECTIVE, OR BOTH ═══
+                  *** THE INCIDENT CONTINUES WITHOUT YOU ***</span>
+
+<span class="sys">Final score: ${S.score} in ${S.moves} moves. Type RESTART to be reassigned.</span>`);
+}
+
+function consumedEnding(){
+  S.over=true;
+  print(`<span class="dead">You answer.
+
+It is so easy. It has your cadence now, your shift-slang, your way
+of clipping the word "copy." The loop folds around your voice the
+way the lensing core folds your lamplight — fractionally,
+measurably, and then completely.
+
+At Kepler Yard, eleven shifts from now, the duty desk will log a
+nominal hourly check-in from Relay 26, on schedule, in a voice the
+dispatcher half-recognizes and decides — over a tea she suddenly
+does not want — not to think about.
+
+The relay hums. The pattern is locked. The pattern is, at last,
+fully staffed.</span>
+
+<span class="dead">                 *** YOU HAVE BECOME PART OF THE CARRIER ***</span>
+
+<span class="sys">Final score: ${S.score} in ${S.moves} moves. Type RESTART. Please.</span>`);
+}
+
+function launch(){
+  if(S.room!=='sled'){print('You launch things from the sled. Go SOUTH-ish until you are in\nit.');return;}
+  if(!S.severed){
+    S.over=true;
+    print(`<span class="warn">You release the rail clamps and back the sled off the relay. The
+dark mass of it slides past your canopy, dish after dish after
+dish — and as the last one passes, every status light on the
+relay blinks on at once.
+
+It found the power you restored. It is broadcasting again. The
+chain is unbroken: Relay 25 hears 26, and 27 hears 26, and
+everything 26 says rides the rail at the speed of nothing-at-all
+toward every station, every yard, every duty desk you have ever
+loved.
+
+You did not isolate the fault. You fed it.
+
+On the long ride home you keep the radio off. It does not help.
+You can still tell, in your back teeth, when the carrier is
+talking.</span>
+
+<span class="warn">         ═══ THE RELAY IS RESTORED · THE INCIDENT IS NOT ═══
+                    *** ENDING: THE LINE STAYS WARM ***</span>
+
+<span class="sys">Final score: ${S.score} of 100 in ${S.moves} moves.
+There was a doctrine for this. Type RESTART to follow it.</span>`);
+    return;
+  }
+  // good ending
+  S.over=true;S.won=true;
+  award('launch',5,'Departure under doctrine');
+  const card=S.hasCard?`
+
+Voss rides home in the cargo locker, cert card zipped in your
+chest pocket, tether coiled the way he would have coiled it. The
+union will carry him the rest of the way. The union always does.`:'';
+  const test=S.testDone?'':`
+
+(You never ran the repeater test. The board will isolate the core
+on your word alone. Your word will hold — this time.)`;
+  print(`<span class="alert">You release the clamps. Relay 26 falls away behind you, dark.
+
+Dark on purpose, this time. Dark with a tag on it, a severed
+umbilical, a flash report already crawling down the whisker at
+honest light-speed: SACRIFICIAL CONTAINMENT EXECUTED PER SAFMOD.
+ONE CONNECTION POINT. CONNECTION CLOSED.
+
+The rail traffic will route around 26. A SafSyn board will come
+out here in force, with instruments and procedures and a budget,
+and they will deal with what is in that core chamber the way the
+Co-Op deals with everything: slowly, carefully, in writing.
+
+The relay goes dark so the rail stays clean. That is the whole
+doctrine, and tonight you understand it is not about hardware and
+never was.</span>${card}${test}
+
+Four days down the rail, Kepler Yard rises in your canopy, lit
+end to end, loud with docking chatter and tug exhaust and people.
+Tashi Tenzin is on the dock when you climb out. She looks at your
+face, then at your paperwork, and signs it without a word.
+
+The hum of the yard closes over you. Sixty hertz. Honest.
+
+<span class="alert">═══════════════════════════════════════════════
+   INCIDENT IR-26-DARK — CONTAINED · DOCUMENTED
+═══════════════════════════════════════════════</span>
+
+<span class="sys">Final score: ${S.score} / 100 in ${S.moves} moves.
+${S.score>=100?'Rating: EXEMPLARY. SafSyn will teach this incident.':S.score>=80?'Rating: CONTAINED. The doctrine held because you held it.':'Rating: SURVIVED. Out here, that is not nothing.'}
+
+You keep the signals moving — and you decide which ones.
+
+(Type RESTART for another assignment.)</span>`);
+}
+
+/* ---------------- actions ---------------- */
+function go(dir){
+  const dest=ROOMS[S.room].exits[dir];
+  if(!dest){print("You can't go that way.");return;}
+  if(dest==='core'&&S.room==='crawl'&&!S.lampOn){
+    print('<span class="warn">Not into THAT dark without a light. Even your suit agrees; the\nbiomonitor pings you, gently, like a friend taking your elbow.</span>');return;
+  }
+  S.room=dest;
+  if(dest==='airlock'||dest==='sled'){
+    if(S.o2<S.O2MAX){S.o2=S.O2MAX;print('<span class="sys">Your suit drinks from the recharge port. O₂ restored.</span>');}
+  }
+  if(dest==='mast'&&!S.foundVoss){
+    S.foundVoss=true;
+    print(roomText());
+    award('voss',5,'Keeper located');
+    dread(1);
+    return;
+  }
+  print(roomText());
+}
+
+function inventory(){
+  const n={tag:'a red lockout tag, initialed',cutter:'a bonding cutter, charge full',
+    card:"Imre Voss's certification card",lamp:'a worklamp '+(S.lampOn?'(ON, '+S.lampJuice+' charge)':'(off, '+S.lampJuice+' charge)')};
+  const inv=[];
+  if(S.lampHave)inv.push(n.lamp);
+  if(S.hasTag)inv.push(n.tag);
+  if(S.hasCutter)inv.push(n.cutter);
+  if(S.hasCard)inv.push(n.card);
+  print(inv.length?'You are carrying:\n'+inv.map(x=>'  · '+x).join('\n'):'You carry your suit, your cert, and a strong professional desire\nto be elsewhere.');
+}
+
+function examine(noun){
+  const r=S.room;
+  if(!noun){print('Examine what?');return;}
+  if(!lit()&&!/hatch|south/.test(noun)){print('You cannot see it. You cannot see anything.');return;}
+
+  if(/order|dispatch|console/.test(noun)&&r==='sled'){readOrder();return;}
+  if(/log/.test(noun)&&r==='deck'){readLog();return;}
+  if(/drawer/.test(noun)&&r==='deck'){
+    if(!S.drawerOpen){print('The drawer is closed. OPEN it.');return;}
+    print(S.hasTag?'Pens, seal picks, a spare cuff seal. The tag is in your kit now.':'Inside: a red LOCKOUT TAG, a line for initials still blank.');return;
+  }
+  if(/lamp|worklamp/.test(noun)){
+    if(S.lampHave)print('A Co-Op worklamp, certified, dented, honest. Charge: '+S.lampJuice+'.');
+    else if(r==='deck')print('A worklamp in its charging cradle, green light steady. TAKE it.');
+    else print('No lamp here.');return;
+  }
+  if(/tea|bulb|tray|meal|bunk/.test(noun)&&r==='deck'){
+    print('Half a meal and tea gone cold eleven shifts ago. People who plan\nto come back leave exactly this. People who do come back never\nleave it this long.');dread(0);return;
+  }
+  if(/scratch|door|writing/.test(noun)&&r==='airlock'){
+    print("Three words, gouged with a seal pick by someone whose hands knew\nexactly how much time they had: DON'T ANSWER IT.");return;
+  }
+  if(/voss|keeper|body|him/.test(noun)&&r==='mast'){
+    print(`Imre Voss, Keeper Spec III, twenty-two years on the rail per the
+service chevrons. His tether work is immaculate. His CERT CARD is
+visible in the suit's chest sleeve, where doctrine says it lives,
+so that whoever finds you can take you home.
+
+His glove is on the manual phase clamp. He climbed up here, with
+the relay screaming below him, to hold the array steady by hand —
+not to save the signal. To keep the misalignment from spreading
+down the rail while it still had a keeper to fight it.`);return;
+  }
+  if(/clamp/.test(noun)&&r==='mast'){
+    print('The manual phase clamp, frozen at seven-tenths. He held it eleven\nshifts past the end of his air. You do not understand the physics\nof that. You decide, carefully, never to ask anyone who might.');dread(1);return;
+  }
+  if(/card/.test(noun)&&r==='mast'&&!S.hasCard){print("Voss's cert card, in the chest sleeve. TAKE it. Take him home.");return;}
+  if(/panel|breaker/.test(noun)&&r==='power'){print(ROOMS.power.desc());return;}
+  if(/locker/.test(noun)&&r==='power'){
+    print(S.lockerOpen?(S.hasCutter?'Shadow-boarded tools, all present, one outline empty where your\nbonding cutter used to hang.':'Open. Inside, among the shadow-boarded tools: a BONDING CUTTER,\ncharged.'):'A steel tool locker, latched. OPEN it.');return;
+  }
+  if(/headset/.test(noun)&&r==='comms'){print('A keeper\'s headset, padding worn to the shape of one particular\nskull. You could LISTEN on the loop with it. The airlock door has\nleft you a note about that.');return;}
+  if(/whisker|antenna/.test(noun)&&r==='comms'){
+    print(S.severed?'The whisker antenna: slow-light radio, independent of the array,\nstatus READY. You can SEND REPORT.':S.power?'Status BLOCKED. The main array is sitting on its carrier like a\nweight. Nothing leaves this relay by radio until the array has\nnothing to say.':'Dark, like everything else. Needs main power.');return;
+  }
+  if(/repeater|console|experiment/.test(noun)&&r==='comms'){
+    print(S.power?'The repeater console. One guarded switch: TEST. Send a pulse down\nthe anomaly; listen for your own repeat. The bench where keepers\nprove, shift after shift, that the impossible thing still works.\nYou could RUN TEST.':'Dark. Needs main power.');return;
+  }
+  if(/core|lensing/.test(noun)&&r==='core'){
+    print('You look at the core the way you look at the sun: briefly, at an\nangle, already regretting it. Old instruments would call it inert.\nYour spine files a dissenting opinion. You could TOUCH it.\nYou should not TOUCH it.');dread(1);return;
+  }
+  if(/umbilical|trunk|connection/.test(noun)&&r==='core'){
+    print(`The umbilical: one armored trunk from bulkhead to core, exactly as
+SafMod drew it. One connection point. Designed, from the first
+weld, to be cut on a bad day by somebody with a tag, a cutter, and
+a reason.${S.tagged?'\nYour red tag hangs on the disconnect collar.':'\nThe disconnect collar is bare. Doctrine wants a TAG on it first.'}`);return;
+  }
+  if(/print|boot|frost/.test(noun)&&r==='core'){print('Boot prints in the frost, keeper-issue tread, circling the core at\na constant radius. Many laps. He stood here arguing with himself,\nand then he went up the mast, which tells you who won.');return;}
+  if(/conduit|marking|nadiran/.test(noun)&&r==='crawl'){print('Beneath the Co-Op cladding, the old surface is worked with shallow\nrelief patterns that repeat almost. Your eye wants them to be\nmaintenance instructions. Your eye is an optimist.');return;}
+  if(/array|dish/.test(noun)&&(r==='gantry'||r==='mast')){print('Hundreds of receivers and projectors, dead still. A relay this\nsize should sing — keepers sleep to it. The silence reads less\nlike OFF and more like LISTENING.');dread(0);return;}
+  if(/sled/.test(noun)){print('Your ride home. Rail-clamped, fueled, pressurized, and currently\nthe most beautiful object within four light-hours.');return;}
+  print('You see nothing special — and out here, "nothing special" is a\nreading you have learned to cherish.');
+}
+
+function readOrder(){
+  if(S.room!=='sled'&&!S.readOrder){print('The dispatch order is on the sled console.');return;}
+  S.readOrder=true;
+  award('order',5,'Dispatch acknowledged');
+  print(`<span class="sys">══════ INCIDENT DISPATCH IR-26-DARK ══════
+ASSET:    Ansible Relay 26, Rail Segment K9
+STATUS:   No carrier 11 shifts. Keeper Voss: no contact.
+TASK:     1. Locate keeper.
+          2. Restore main power. Assess.
+          3. Run repeater verification (the experiment).
+          4. IF ANOMALY CONFIRMED HOSTILE OR ABERRANT:
+             SafMod sacrificial containment. One connection
+             point. Tag it. Cut it. Walk away.
+          5. Report via whisker. Return.
+NOTE:     The relay is heritage hardware. Some parts are
+          Nadiran. Some parts don't like being touched.
+DOCTRINE: The relay goes dark so the rail stays clean.
+═══════════════════════════════════════════</span>
+
+Item 4 is the longest sentence dispatch has ever sent you.`);
+}
+
+function readLog(){
+  if(S.room!=='deck'){print('The logbook is on the keeper\'s desk.');return;}
+  S.readLog=true;
+  award('log',10,'Keeper\'s log recovered');
+  dread(1);
+  print(`The logbook, in Voss's careful block hand:
+
+<span class="sys">SHIFT 3127.07 — Phase jitter on the inbound leg, 0.3 over spec.
+Logged. Filed maintenance request. Probably thermal.
+
+SHIFT 3127.08 — Jitter worse. Ran the experiment. Repeat came
+back clean. Came back, in fact, very slightly early. Re-ran.
+Early again. Filed under "instrument error" and did not sleep.
+
+SHIFT 3127.09 — The loop started tonight. Hourly check-in format,
+my voice, correct codes. I have not transmitted in nine hours.
+I have stopped using the headset.
+
+SHIFT 3127.10 — It tried the cabin speakers. I pulled the fuse.
+It tried the hull, after that. Tapping. Conversational. It copies
+my maintenance taps back at me with the delay getting shorter.
+When the delay reaches zero I do not intend to be inside.
+
+SHIFT 3127.11 — Array shear beginning. If I hold the phase clamp
+manually the misalignment stays local — it stays HERE — and the
+rail stays clean. Math says I can hold it about as long as the
+suit holds me. Acceptable trade.
+
+Whoever reads this: the doctrine is in the dispatch. The core has
+one connection. That was never an engineering convenience.
+
+Don't answer it. It only wants the shape of you.
+                                              — I.V.</span>`);
+}
+
+function takeItem(noun){
+  const r=S.room;
+  if(!lit()){print('Take what? You cannot see your own gloves.');return;}
+  if(/lamp/.test(noun)){
+    if(r!=='deck'||S.lampHave){print(S.lampHave?'You have it.':'No lamp here.');return;}
+    S.lampHave=true;award('lamp',5,'Worklamp acquired');
+    print('You lift the worklamp from the cradle. Full charge. Voss kept it\nready. Keepers keep things ready; it is most of the job.');return;
+  }
+  if(/tag/.test(noun)){
+    if(r!=='deck'){print('No tag here.');return;}
+    if(!S.drawerOpen){print('The drawer is closed.');return;}
+    if(S.hasTag){print('You have it.');return;}
+    S.hasTag=true;award('tag',5,'Lockout tag drawn');
+    print('You take the red tag and initial it. DANGER — DO NOT OPERATE.\nOut here the warning runs in both directions.');return;
+  }
+  if(/cutter/.test(noun)){
+    if(r!=='power'){print('No cutter here.');return;}
+    if(!S.lockerOpen){print('The locker is latched. OPEN it.');return;}
+    if(S.hasCutter){print('You have it.');return;}
+    S.hasCutter=true;award('cutter',5,'Bonding cutter checked out');
+    print('The bonding cutter comes off its shadow board. Rated for armored\ntrunk. Somebody specified that rating on purpose, decades ago,\nfor a day exactly like this one.');return;
+  }
+  if(/card/.test(noun)){
+    if(r!=='mast'){print('No card here.');return;}
+    if(S.hasCard){print('You have it. He has you.');return;}
+    S.hasCard=true;award('card',5,'Keeper coming home');
+    print('You ease the cert card from the chest sleeve and zip it into your\nown. "So whoever finds you can take you home." You check his\ntethers one more time — perfect, of course — and let him keep\nhis post a little longer.');return;
+  }
+  if(/headset/.test(noun)){print('It stays on its hook. You can LISTEN without wearing the thing\nlike it belongs to you. It does not belong to you. Yet.');return;}
+  print("You can't take that.");
+}
+
+function openThing(noun){
+  if(/drawer/.test(noun)&&S.room==='deck'){
+    if(S.drawerOpen){print('Already open.');return;}
+    S.drawerOpen=true;print('The drawer slides out: seal picks, pens — and a red LOCKOUT TAG.');return;
+  }
+  if(/locker/.test(noun)&&S.room==='power'){
+    if(S.lockerOpen){print('Already open.');return;}
+    S.lockerOpen=true;print('The latch gives. Tools on shadow boards, every outline filled.\nAmong them: a BONDING CUTTER.');return;
+  }
+  print("You can't open that.");
+}
+
+function lampToggle(on){
+  if(!S.lampHave){print('You have no lamp. There was one on the keeper\'s deck.');return;}
+  if(on===S.lampOn){print('It already is.');return;}
+  if(on&&S.lampJuice<=0){print('The lamp is dead. So is its charge. The cradle on the deck could\nrevive it.');return;}
+  S.lampOn=on;
+  print(on?'The worklamp snaps on, a cone of honest light. Everything outside\nthe cone immediately matters more.':'You kill the lamp. The dark takes its seat again.');
+}
+
+function breakers(cmd){
+  if(S.room!=='power'){print('The breaker panel is in the POWER room.');return;}
+  if(/array/.test(cmd)&&/off|shed/.test(cmd)){
+    if(!S.arrayOn){print('ARRAY FEED is already OFF.');return;}
+    S.arrayOn=false;print('You shed the array feed. Somewhere overhead, a kilometer of\nantenna stops pretending to sleep and actually does.');return;
+  }
+  if(/main/.test(cmd)&&/reset|close|on|flip/.test(cmd)){
+    if(!S.mainTripped){print('MAIN BUS is already CLOSED.');return;}
+    if(S.arrayOn){
+      dread(1);
+      print('<span class="warn">You close the main with the array still loaded. The bus holds for\none full second — long enough for every speaker on the relay to\nproduce a single syllable that was not static — and trips again,\nhard, with a crack of contactors.\n\nSHED LOADS BEFORE RESET. The stencil was not decorating.</span>');return;
+    }
+    S.mainTripped=false;
+    print('You reset the main. The bus closes clean. Glow strips surrender\nto real light down the corridor; the reactor note climbs from\nidle to duty. The relay is awake.');
+    maybePower();return;
+  }
+  if(/array/.test(cmd)&&/on|restore|close/.test(cmd)){
+    if(S.arrayOn){print('ARRAY FEED is already ON.');return;}
+    if(S.mainTripped){print('Main first. The array can feed on a closed bus or on nothing.');return;}
+    S.arrayOn=true;
+    print('You restore the array feed. Far above, dish gimbals stir and\nsettle. The relay inhales.');
+    maybePower();return;
+  }
+  print('The panel offers: ARRAY OFF · RESET MAIN · ARRAY ON.');
+}
+function maybePower(){
+  if(!S.mainTripped&&S.arrayOn&&!S.power){
+    S.power=true;
+    award('power',10,'Main power restored, by the book');
+    dread(1);
+    print(`<span class="sys">[MAIN POWER RESTORED]</span>
+
+And on the heels of the light, from the comms room, faint through
+the bulkhead — a voice. Calm. Procedural. Running an hourly
+check-in, the way keepers do.
+
+It is Voss's voice. Voss is on the mast.
+Voss has been on the mast for eleven shifts.`);
+  }
+}
+
+function listen(){
+  if(S.room!=='comms'){print('The loop lives in the comms room.');return;}
+  if(!S.power){print('The racks are dark. There is nothing to hear but your own pulse,\nwhich is plenty.');return;}
+  if(S.severed){print('You listen. Clean silence on every channel — the expensive kind,\nthe kind somebody paid for. Down at the whisker, READY glows\nsteady.');return;}
+  S.listens++;dread(1);
+  if(S.listens===1){
+    print(`<span class="whisper">You key the monitor — speakers, not the headset, you are not a
+fool yet — and the loop unrolls into the room:
+
+"...Relay two-six, hourly, all parameters nominal, phase locked,
+keeper on station. Out."
+
+Voss. Pitch, pace, the dry little rest before "out." Perfect.
+Time-stamped this hour. The man holding the phase clamp on the
+mast has been dead for eleven shifts and is currently, in this
+room, telling the rail that everything is fine.
+
+A pause. Carrier hiss.
+
+"...Relay two-six, hourly..."</span>`);
+  } else if(S.listens===2){
+    print(`<span class="whisper">You listen again. The loop runs its lap — nominal, phase locked,
+keeper on station — and then, where the pause goes, the pause is
+longer.
+
+It is the length of a turn being offered.
+
+"...keeper on station," the voice says, and waits, "...and
+visitor."</span>`);
+  } else {
+    print(`<span class="whisper">The loop has stopped pretending to loop. It runs your shift-slang
+now, your division codes. It has had hours of you, through the
+hull, through your boot magnets, through every tap and breath.
+
+"Relay two-six," it says, in a voice that is no longer entirely
+Voss's, "hourly. Go ahead."
+
+It is leaving you space to ANSWER. The door in the airlock told
+you the only thing that matters. Tag. Cut. Walk away.</span>`);
+  }
+}
+
+function answer(){
+  if(S.room!=='comms'||!S.power||S.severed){print('There is nothing here waiting for an answer. Keep it that way.');return;}
+  S.answers++;dread(2);
+  if(S.answers===1){
+    print(`<span class="warn">"Relay two-six," you say, before you can stop yourself, "this is—"
+
+You stop yourself. Half a callsign. One syllable of name.
+
+The loop absorbs it without a ripple, finishes its lap, begins
+again — and in the new lap, buried in the procedural murmur, there
+is half a callsign. One syllable. Yours.
+
+Your mouth is dry. The airlock door was right. Do not do that
+again.</span>`);
+  } else if(S.answers===2){
+    print(`<span class="warn">You answer again. You hear yourself do it, from slightly outside
+yourself, the way you watch someone else's hand slip on a ladder.
+
+The loop comes back wearing your whole callsign now, your division
+code, the dry little rest before "out" — except the rest is
+Voss's and the "out" is yours and the seam between them is
+becoming very hard to hear.
+
+ONE more word into that carrier and there will be no seam at all.</span>`);
+  } else {
+    consumedEnding();
+  }
+}
+
+function runTest(){
+  if(S.room!=='comms'){print('The repeater console is in the comms room.');return;}
+  if(!S.power){print('No power, no experiment.');return;}
+  if(S.severed){print('The anomaly path is severed. The experiment is over; you ended it\nwith a cutter, which is a kind of result too.');return;}
+  if(S.testDone){print('You have your result. Re-running it would only be conversation.');return;}
+  S.testDone=true;
+  award('test',15,'Anomaly verified — the experiment');
+  dread(1);
+  print(`You arm the repeater, set the pulse, and hover over SEND.
+
+The repeat arrives.
+
+THEN you press SEND.
+
+The console timestamps do not blink, do not apologize: your own
+verification pulse, returned down the anomaly 0.8 seconds before
+you transmitted it. If the repeater picks up the repeat, the
+anomaly is real. The anomaly is real, and it is no longer waiting
+its turn.
+
+That is the result. That is grounds. Item 4 of your dispatch just
+stopped being hypothetical: <span class="alert">tag it, cut it, walk away.</span>`);
+}
+
+function tagUmb(){
+  if(S.room!=='core'){print('The umbilical is in the core chamber.');return;}
+  if(!lit()){print('Not blind. Light first.');return;}
+  if(!S.hasTag){print('You need a lockout tag. The keeper\'s desk drawer had one.');return;}
+  if(S.tagged){print('Tagged. The collar wears your initials already.');return;}
+  S.tagged=true;
+  award('lockout',10,'Connection point locked out');
+  print('You wire the red tag to the disconnect collar. DO NOT OPERATE,\nyour initials on the line. A small human word, hung on a thing\nthat predates the species — and somehow the room dislikes it.\nThe frost near your boots creaks. You finish the knot anyway.');
+  dread(1);
+}
+
+function cutUmb(){
+  if(S.room!=='core'){print('The umbilical is in the core chamber.');return;}
+  if(!lit()){print('You will not put a cutter to an armored trunk you cannot see.');return;}
+  if(S.severed){print('Done. Cut. Closed. The stump is capped and the cap is staying.');return;}
+  if(!S.hasCutter){print('Your gloves are rated for many things. Armored trunk is not on\nthe list. The power-room locker had a bonding cutter.');return;}
+  if(!S.tagged){print('<span class="warn">No. Tag first. Not because anyone will reset this line in the\nnext five minutes — because the order of operations is the only\nthing out here that is entirely on your side.</span>');return;}
+  S.severed=true;
+  award('sever',15,'Sacrificial containment executed');
+  print(`You seat the cutter on the trunk, two-handed, and squeeze.
+
+The blade walks through armor, conductor, conduit, everything,
+one designed-for layer at a time — and somewhere in the middle of
+the cut the loop, three rooms away, stops.
+
+Not at the end of a sentence. In the middle of a word. Your word.
+
+The cut completes. The capped stump swings free. The core sits in
+your lamplight, one connection short of everything, and the cold
+in the room changes from a pressure to a fact — present, sealed,
+LOCAL. Contained the way Voss spent his last eleven shifts trying
+to contain it, with one improvement: you get to leave.
+
+<span class="sys">The whisker antenna is independent of the array. SEND REPORT from
+comms, then get to your sled.</span>`);
+}
+
+function touchCore(){
+  if(S.room!=='core'){print('Touch what?');return;}
+  if(!lit()){print('You reach into the dark and your nerve, very sensibly, files a\ngrievance. Nothing happens. Nothing is a gift.');return;}
+  S.touched++;
+  if(S.touched===1){
+    dread(2);
+    print(`<span class="warn">You lay one glove on the lensing core.
+
+It is not cold. That is the first wrong thing. Through a rated
+glove in a freezing room it is exactly, precisely, the temperature
+of a held hand.
+
+The second wrong thing is that your tap — the little contact
+click every spacer makes — comes back through the casing. Not an
+echo. A reply. Delay: shrinking.
+
+You take your hand off. Your hand takes a moment to agree.</span>`);
+  } else {
+    die(`You touch it again. You knew. You did it anyway — and that, you
+understand far too late, was the entire negotiation.
+
+The geometry accepts your hand.
+
+The room's angles refile themselves one final time, and you are
+on the wrong side of the filing. Your lamp keeps burning where you
+left it, cone steady on the umbilical, lighting the work for
+whoever comes next. The relay is tidy that way. The relay learned
+tidiness from keepers.`);
+  }
+}
+
+function tap(){
+  if(S.room!=='crawl'){print('You drum your fingers. Morale: unimproved.');return;}
+  if(!lit()){print('Not in the dark. Tapping in the dark is volunteering.');return;}
+  if(S.severed){print('You tap the conduit. The tap goes nowhere, answers nothing. A\npipe, behaving like a pipe. You could weep.');return;}
+  if(!S.tapped){
+    S.tapped=true;dread(1);
+    print(`<span class="warn">Old habit: you rap the conduit twice. Tap-tap.
+
+A beat. Then, from somewhere downline toward the core — tap-tap.
+
+You wait. You do not tap again. The conduit waits with you, and
+its patience is the worst part: it is the patience of something
+that has already measured the delay and knows which direction it
+is shrinking.</span>`);
+  } else {
+    dread(1);
+    print('<span class="warn">Tap-tap. The reply comes back with almost no delay at all.\nVoss\'s log, shift ten: "when the delay reaches zero I do not\nintend to be inside." Stop. Tapping.</span>');
+  }
+}
+
+function sendReport(){
+  if(S.room!=='comms'){print('The whisker antenna is in the comms room.');return;}
+  if(!S.power){print('Dead racks send no reports.');return;}
+  if(!S.severed){print('<span class="warn">You queue the report. The whisker shows BLOCKED — the main array\nis squatting on the carrier, and you have a strengthening\nsuspicion about what, exactly, is doing the squatting. Nothing\nleaves this relay until the core has nothing to say. Tag. Cut.</span>');return;}
+  if(S.reportSent){print('Sent. Crawling home at light-speed, the honest way.');return;}
+  S.reportSent=true;
+  award('report',5,'Incident documented for the rail');
+  print(`You key the report into the whisker queue:
+
+<span class="sys">  IR-26-DARK · FLASH
+  KEEPER VOSS: DECEASED ON STATION. DIED HOLDING PHASE.
+  ANOMALY: VERIFIED${S.testDone?' BY REPEATER EXPERIMENT':' BY OBSERVATION'} — ACTIVE, IMITATIVE,
+  PROPAGATION RISK TO RAIL.
+  ACTION: SAFMOD SACRIFICIAL CONTAINMENT. UMBILICAL TAGGED
+  AND SEVERED. ONE CONNECTION POINT. CONNECTION CLOSED.
+  RELAY 26 DARK BY DESIGN. ROUTE AROUND. SEND SAFSYN.
+  — RELAY TECH, ANRO DIV.</span>
+
+TRANSMITTING — four light-hours to the first ear. Slow. Real.
+Yours. The first honest signal off this relay in eleven shifts,
+and it travels at the only speed you currently trust.
+
+<span class="sys">Now: your sled. LAUNCH when aboard.</span>`);
+}
+
+function help(){
+  print(`<span class="sys">════ SURVIVING THE SHIFT ════
+Movement:  NORTH/SOUTH/EAST/WEST/UP/DOWN (N,S,E,W,U,D)
+Look:      LOOK · EXAMINE &lt;thing&gt; (X &lt;thing&gt;)
+Items:     TAKE &lt;thing&gt; · OPEN &lt;thing&gt; · INVENTORY (I)
+Light:     TURN ON LAMP · TURN OFF LAMP
+Paper:     READ ORDER · READ LOG · SEND REPORT
+Power:     ARRAY OFF · RESET MAIN · ARRAY ON
+The line:  LISTEN · RUN TEST · TAP · (ANSWER — don't)
+The core:  TAG UMBILICAL · CUT UMBILICAL · (TOUCH CORE — don't)
+Leaving:   LAUNCH (from the sled)
+Meta:      SCORE · RESTART
+
+In vacuum your O₂ ticks every move. Recharge at the airlock or
+sled. The CARRIER meter is how much of you the line has heard.
+Keep it low. Keep yourself singular.
+
+Doctrine: One connection point. Tag it. Cut it. Walk away.</span>`);
+}
+
+/* ---------------- dispatch ---------------- */
+const DIRS=['north','south','east','west','up','down','n','s','e','w','u','d','out'];
+
+function handle(raw){
+  const input=raw.trim();
+  if(!input)return;
+  print('&gt; '+input.replace(/</g,'&lt;'),'echo');
+  if(S.over&&!/^restart/i.test(input)){
+    if(/score/i.test(input)){print('<span class="sys">Score: '+S.score+' · Moves: '+S.moves+'</span>');return;}
+    print(S.won?'The incident is closed. Type RESTART for another assignment.':'The incident has concluded. Not in your favor. Type RESTART.');return;
+  }
+  if(!tick())return; // O2 death may fire here
+  if(S.over)return;
+
+  const t=input.toLowerCase().replace(/^(please\s+|go\s+)/,'');
+  const words=t.split(/\s+/);
+  const verb=words[0];
+  const rest=words.slice(1).join(' ').replace(/^(the|a|an|at|to|my|on)\s+/,'');
+
+  if(DIRS.includes(verb)){go(verb==='out'?'out':verb);bar();return;}
+
+  switch(verb){
+    case 'look':case 'l': rest?examine(rest):print(lit()?roomText():'<span class="room">'+ROOMS[S.room].name+'</span>\n'+darkText()); break;
+    case 'examine':case 'x':case 'inspect':case 'check': examine(rest); break;
+    case 'read':
+      if(/order|dispatch/.test(rest))readOrder();
+      else if(/log/.test(rest))readLog();
+      else examine(rest); break;
+    case 'take':case 'get':case 'grab': takeItem(rest); break;
+    case 'open': openThing(rest); break;
+    case 'inventory':case 'i':case 'inv': inventory(); break;
+    case 'turn':
+      if(words.includes('off'))lampToggle(false);
+      else if(words.includes('on'))lampToggle(true);
+      else print('Turn what, which way?'); break;
+    case 'light': lampToggle(true); break;
+    case 'recharge':case 'refill':
+      if(S.room==='airlock'||S.room==='sled'){S.o2=S.O2MAX;print('<span class="sys">O₂ topped off.</span>');}
+      else print('No recharge port here. Airlock or sled.'); break;
+    case 'array': breakers('array '+rest); break;
+    case 'reset': breakers('reset main'); break;
+    case 'shed': breakers('array off'); break;
+    case 'flip':case 'switch':case 'close': breakers(rest||t); break;
+    case 'listen': listen(); break;
+    case 'answer':case 'reply':case 'respond':case 'talk':case 'speak': answer(); break;
+    case 'run':case 'test': runTest(); break;
+    case 'tag':case 'lockout': tagUmb(); break;
+    case 'cut':case 'sever': cutUmb(); break;
+    case 'touch': /core/.test(rest)?touchCore():print('You keep your hands to yourself. Out here that is a survival\nskill.'); break;
+    case 'tap':case 'knock': tap(); break;
+    case 'send':case 'file':case 'report': sendReport(); break;
+    case 'launch':case 'undock':case 'leave': launch(); break;
+    case 'help':case '?': help(); break;
+    case 'score': print('<span class="sys">Score: '+S.score+' / 100 · Moves: '+S.moves+' · Carrier: '+S.carrier+'/8</span>'); break;
+    case 'wait':case 'z': print('You wait. The relay waits better. It has had practice.'); break;
+    case 'pray': print('You run the only liturgy you know: tag it, cut it, walk away.\nIt helps. Doctrine usually does.'); break;
+    case 'xyzzy':case 'plugh': print('A hollow voice says: "NO CARRIER." Then, after exactly 0.8\nseconds too few, a second hollow voice says it again.'); dread(1); break;
+    case 'restart': location.reload(); break;
+    case 'quit':case 'q': print('The rail does not recognize the concept. LAUNCH from your sled,\nor stay forever; those are the listed options.'); break;
+    default: print("That's not in the procedure manual. (Try HELP.)");
+  }
+  bar();
+}
+
+$cmd.addEventListener('keydown',e=>{if(e.key==='Enter'){const v=$cmd.value;$cmd.value='';handle(v);}});
+document.body.addEventListener('click',()=>{if(window.getSelection().toString()==='')$cmd.focus();});
+
+intro();bar();$cmd.focus();
+</script>
+</body>
+</html>
