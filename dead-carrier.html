@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DEAD CARRIER — An Interactive Incident on the Ansible Rail</title>
+<title>DEAD CARRIER — An ItSyn Training Simulation</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -36,9 +36,9 @@
     position:absolute;left:0;right:0;bottom:-6px;height:6px;
     background:repeating-linear-gradient(45deg,var(--coal) 0 14px,var(--orange) 14px 28px);
   }
-  #plate .mark{font-weight:700;font-size:22px}
-  #plate .mark .co{color:var(--orange)}
-  #plate .mark .mod{color:var(--coal)}
+  #plate .mark{font-weight:700;font-size:22px;letter-spacing:.02em}
+  #plate .mark .it{color:var(--orange)}
+  #plate .mark .syn{color:#0D182A}
   #plate .sub{font-size:10px;letter-spacing:.18em;text-transform:uppercase;margin-top:2px}
   #plate .docid{position:absolute;top:10px;right:16px;text-align:right;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
   #plate .docid b{display:block;font-size:13px}
@@ -92,9 +92,9 @@
 <body>
 
 <header id="plate">
-  <div class="mark"><span class="co">Co</span><span class="mod">Modularism</span></div>
-  <div class="sub">Dead Carrier · An Interactive Incident · Ansible Relay Network Ops</div>
-  <div class="docid">INCIDENT <b>IR-26-DARK</b>CLASS: RESTRICTED</div>
+  <div class="mark"><span class="it">IT</span><span class="syn">SYN</span></div>
+  <div class="sub">Intersystem Transport Syndicate · Training Division · Difficulty: You Can Die</div>
+  <div class="docid">TRAINING SIM <b>TS-26-DARK</b>CLASS: EXPERT · FATAL</div>
   <div class="stripe"></div>
 </header>
 
@@ -119,7 +119,9 @@
    Doctrine: One connection point. Sacrificial containment.
    ================================================================== */
 
-const WM = '<span class="wm"><span class="co">Co</span><span class="mod">Modularism</span></span>';
+/* Wordmark note: this deliverable carries ItSyn Training Division marks.
+   The CoModularism wordmark does not appear; CSL-VIS-01 remains in force
+   and no variant of that mark, correct or incorrect, is rendered here. */
 
 const $screen=document.getElementById('screen'),$cmd=document.getElementById('cmd');
 const $loc=document.getElementById('st-loc'),$score=document.getElementById('st-score');
@@ -139,12 +141,13 @@ const S={
   room:'sled',score:0,moves:0,over:false,won:false,
   o2:12,O2MAX:12,
   carrier:0,answers:0,touched:0,
-  lampHave:false,lampOn:false,lampJuice:22,
+  lampHave:false,lampOn:false,lampJuice:16,
   power:false,mainTripped:true,arrayOn:true,
   readOrder:false,readLog:false,lockerOpen:false,drawerOpen:false,
   hasTag:false,hasCutter:false,hasCard:false,
   tagged:false,severed:false,testDone:false,reportSent:false,
-  foundVoss:false,tapped:false,listens:0,
+  foundBartos:false,tapped:false,taps:0,listens:0,
+  darkTurns:0,quake:0,badResets:0,railShake:0,
   awarded:new Set(),
 };
 
@@ -162,6 +165,19 @@ function dread(n){
   S.carrier=Math.min(8,S.carrier+n);
   document.body.classList.toggle('attuned',S.carrier>=5);
   bar();
+  if(S.carrier>=8&&!S.over){
+    die(`Somewhere between one heartbeat and the next, the delay reaches
+zero.
+
+There is no violence in it. There is only the moment when the
+line has heard enough of you — pulse, gait, breath, the little
+click of your tongue before you speak — that the distinction the
+universe was maintaining between you and your echo becomes,
+formally, a rounding error.
+
+The relay resumes its hourly check-ins. All parameters nominal.
+Keeper on station.`);
+  }
 }
 function bar(){
   $loc.textContent=ROOMS[S.room].name;
@@ -173,7 +189,7 @@ function bar(){
   } else $o2.textContent='';
   let c='';
   for(let i=0;i<8;i++)c+=i<S.carrier?'<span class="on">▮</span>':'<span class="off">▯</span>';
-  $car.innerHTML='CARRIER: '+c;
+  $car.innerHTML=S.quake>0?'<span class="on">STRUCTURAL: '+S.quake+'</span>':'CARRIER: '+c;
 }
 function lit(){
   if(VACUUM.has(S.room))return true;            // suit lamp ring / starlight
@@ -203,7 +219,12 @@ sealed and green across the board.`,
   },
   gantry:{
     name:'EXTERIOR GANTRY',
-    desc:()=>`Hard vacuum. The gantry runs along the relay's spine, handholds
+    desc:()=>S.quake>0?`Hard vacuum, and the gantry is ALIVE. The rail sings under your
+boot clamps — a note below hearing that arrives through your
+skeleton instead, rising, hunting. Handholds shed frost in
+standing waves. The whole spine of the relay is a plucked wire.
+
+Your sled is SOUTH. Nothing else out here matters. GO.`:`Hard vacuum. The gantry runs along the relay's spine, handholds
 every meter, your boots clipped to the rail the way every
 railwalker learns before they learn anything else.
 
@@ -214,16 +235,16 @@ motionless. They hum. They sing. They keep the pattern locked.
 This one is holding its breath.
 
 The AIRLOCK is NORTH. The array MAST ladder leads UP. Your sled
-is SOUTH.${S.foundVoss?'':'\n\nFar up the mast, something pale is tethered to the topmost\nplatform. It does not move. Tethered things in vacuum never do.'}`,
+is SOUTH.${S.foundBartos?'':'\n\nFar up the mast, something pale is tethered to the topmost\nplatform. It does not move. Tethered things in vacuum never do.'}`,
     exits:{north:'airlock',n:'airlock',south:'sled',s:'sled',up:'mast',u:'mast'},
   },
   mast:{
     name:'ARRAY MAST — TOP PLATFORM',
     desc:()=>{
-      if(!S.foundVoss) return `You haul yourself onto the top platform and your headlamp finds
+      if(!S.foundBartos) return `You haul yourself onto the top platform and your headlamp finds
 him.
 
-KEEPER IMRE VOSS. Suit intact, tether doctrine-perfect, dual
+KEEPER IMRE BARTOS. Suit intact, tether doctrine-perfect, dual
 clipped. His glove is closed on the MANUAL PHASE CLAMP — the
 hand-crank of last resort that holds the array's alignment when
 everything else has let go.
@@ -232,7 +253,7 @@ His faceplate is frosted from the inside. He has been here eleven
 shifts, holding the line by hand, and he is not letting go now.
 
 The ladder leads DOWN.`;
-      return `The top platform. Voss keeps his post, glove closed on the phase
+      return `The top platform. Bartos keeps his post, glove closed on the phase
 clamp. The stars do not look at him. You try to manage the same.
 
 The ladder leads DOWN.`;
@@ -258,7 +279,7 @@ gantry.`,
     desc:()=>`The keeper's deck, lit ${S.power?'properly now, which somehow makes it worse —\nevery abandoned thing in it has a shadow':'only by emergency glow strips, a green\ndusk that makes every shape a guess'}.
 
 A bunk, made. A meal tray, not finished. Tea in a zero-g bulb
-gone the color of old varnish. Voss left mid-bite and never came
+gone the color of old varnish. Bartos left mid-bite and never came
 back for it.
 
 The station LOGBOOK lies open on the desk beside a DRAWER. A
@@ -277,7 +298,7 @@ experiment: send a pulse down the anomaly, listen for your own
 repeat. If the repeater picks up the repeat, the anomaly is real.
 If not, our theory collapses.
 
-A HEADSET hangs on its hook, cable neatly coiled. Voss was tidy.
+A HEADSET hangs on its hook, cable neatly coiled. Bartos was tidy.
 
 `;
       if(!S.power) t+=`Every rack is dark. Nothing here will speak until main power is
@@ -360,7 +381,7 @@ Per SafMod one-connection-point doctrine, exactly one UMBILICAL
 joins the core to the relay: power, data, and everything else
 down a single sacrificial trunk, made to be cut.
 
-The frost on the deck plates is disturbed. Boot prints. Voss came
+The frost on the deck plates is disturbed. Boot prints. Bartos came
 here too, before he chose the mast instead.
 
 The crawlway is SOUTH.`;
@@ -383,13 +404,21 @@ SOUTH, and you should.`];
 
 /* ---------------- intro ---------------- */
 function intro(){
+  print(`<span class="sys">ITSYN TRAINING DIVISION · SIMULATION TS-26 "DEAD CARRIER"
+Reconstructed from Incident IR-26-DARK, Ansible Relay Network
+Operations. Candidates are evaluated on doctrine, air discipline,
+and survival. PROCEDURE IS SURVIVAL.
+
+NOTE: All loop audio in this simulation is archival and is
+presented unmodified. Do not answer it. This is a training
+requirement. It is also the other thing.</span>`);
   print(`<span class="alert">ANSIBLE RELAY 26 — RAIL SEGMENT K9</span>
 <span class="sys">CYCLE 3127.19 · STATUS: DARK, 11 SHIFTS · KEEPER: NO CONTACT</span>
 
 You are an ItSyn relay technician, Ansible Relay Network
 Operations Division. The patch on your shoulder says you keep the
 signals moving. The dispatch in your console says Relay 26 stopped
-moving them, and stopped answering, and that Keeper Imre Voss has
+moving them, and stopped answering, and that Keeper Imre Bartos has
 missed eleven consecutive check-ins.
 
 The relays are old. Some parts are Nadiran.
@@ -400,7 +429,11 @@ said before you passed out of real-time range:
 
 <span class="whisper">"Whatever you find — follow the doctrine. The doctrine is not
 for the relay's protection, kid."
-                                        — T. Tenzin, Dock Chief</span>
+                                        — T. Sokolova, Dock Chief</span>
+
+<span class="dead">This assignment is rated FATAL. The vacuum can kill you. The dark
+can kill you. The panel can kill you. The line can take you. Read
+everything. Trust the doctrine. Count your air.</span>
 
 <span class="sys">Type HELP for commands. Type LOOK to look around.</span>`);
   print(roomText());
@@ -427,6 +460,68 @@ function tick(){
 The relay watches you with its hundred dark dishes. The stars are
 very clean out here, and very patient, and the last thing you
 register is that the array has begun — softly, at last — to hum.`);return false;}
+  }
+  // darkness is not neutral
+  if(!S.over&&NEEDLAMP.has(S.room)&&!lit()){
+    S.darkTurns++;
+    if(S.darkTurns===1){
+      print('<span class="dead">The dark leans in. Something in it is counting — your breaths,\nyour outline, the distance. One more moment unlit in here and it\nwill finish the count. LIGHT, or OUT. Now.</span>');
+      dread(1);
+      if(S.over)return false;
+    } else {
+      die(`The count completes.
+
+You never see it, because seeing was never the sense it uses. The
+last thing you register is your own heartbeat, played back to you
+from half a meter ahead, with no delay at all.`);
+      return false;
+    }
+  } else S.darkTurns=0;
+  // the rail carries the shear — vacuum sections during collapse
+  if(!S.over&&S.quake>0&&VACUUM.has(S.room)){
+    S.railShake++;
+    if(S.railShake===1){
+      print('<span class="warn">The instant your boot clamps bite the rail, the shear finds you.\nA buzz in your molars, your sinuses, the long bones of your arms.\nThe rail is a kilometer-long tuning fork now and you are clipped\nto it. Do not stay on it. Cross and get OFF.</span>');
+    } else if(S.railShake===2){
+      print('<span class="dead">The vibration climbs through the clamps into your chest cavity.\nYour HUD smears. Your biomonitor throws a rhythm alarm — your\nheart is trying to keep its own time against the rail\'s, and the\nrail is louder. ONE more turn out here and it will conduct you.\nSLED. INSIDE. OFF THE RAIL.</span>');
+    } else {
+      die(`The rail finds your frequency.
+
+It comes up through the boot clamps, through the suit's armature,
+through bone — a kilometer of shearing steel using your body as
+its last free resonator. Your biomonitor alarm rises, flattens,
+and resolves into a single sustained tone, and the terrible thing
+about the tone is that it is in tune with the rail.
+
+Your heart, which kept honest sixty-a-minute time through four
+days of transit and eleven kinds of fear, stops between two
+oscillations it could not tell apart.
+
+Your tether work holds. Your clamps hold. Doctrine holds you to
+the rail, upright at your post, the way it held Bartos to his —
+and when the mast folds, it gathers you both.`);
+      return false;
+    }
+  } else S.railShake=0;
+  // structural collapse countdown
+  if(!S.over&&S.quake>0){
+    S.quake--;
+    if(S.quake===0){
+      die(`The rail lets go.
+
+Array shear finishes what the misalignment started: a kilometer
+of mast folds sideways with no sound at all, and the relay — and
+you, and your tidy red tag, and your correct, doctrine-perfect
+cut — leave the rail together, tumbling, dark, contained.
+
+SafSyn will classify the containment as successful.
+Posthumous commendations are still commendations.`);
+      return false;
+    }
+    if(S.quake===8)print('<span class="warn">A railquake shudder rolls down the spine. Frost jumps off every\nsurface at once. The relay is coming apart around the wound you\ngave it. MOVE.</span>');
+    if(S.quake===4)print('<span class="dead">STRUCTURAL: the hull is singing in a key hulls do not have.\nSled. NOW.</span>');
+    if(S.quake===2)print('<span class="dead">Girders are parting somewhere overhead like slow applause.</span>');
+    return true;
   }
   // ambience
   if(!S.over&&Math.random()<0.18){
@@ -456,9 +551,13 @@ function die(text){
   S.over=true;
   print('<span class="dead">'+text+'</span>');
   print(`<span class="dead">      ═══ YOU HAVE LOST PRESSURE, PERSPECTIVE, OR BOTH ═══
-                  *** THE INCIDENT CONTINUES WITHOUT YOU ***</span>
+                  *** SIMULATION TERMINATED — CANDIDATE DECEASED ***</span>
 
-<span class="sys">Final score: ${S.score} in ${S.moves} moves. Type RESTART to be reassigned.</span>`);
+<span class="sys">EVALUATOR'S NOTE: This is where the simulation grants you a
+RESTART. Candidates are reminded that the technician in the live
+incident was not offered one, and neither was Keeper Bartos.
+
+Final score: ${S.score} in ${S.moves} moves. Type RESTART.</span>`);
 }
 
 function consumedEnding(){
@@ -478,9 +577,15 @@ does not want — not to think about.
 The relay hums. The pattern is locked. The pattern is, at last,
 fully staffed.</span>
 
-<span class="dead">                 *** YOU HAVE BECOME PART OF THE CARRIER ***</span>
+<span class="dead">                 *** YOU HAVE BECOME PART OF THE CARRIER ***
+                    *** SIMULATION UNABLE TO TERMINATE ***
+                       *** SIMULATION TERMINATED ***</span>
 
-<span class="sys">Final score: ${S.score} in ${S.moves} moves. Type RESTART. Please.</span>`);
+<span class="sys">EVALUATOR'S NOTE: the archival loop in this scenario gains no new
+material during simulation runs. This is checked after every run.
+It is checked after every run for a reason.
+
+Final score: ${S.score} in ${S.moves} moves. Type RESTART. Please.</span>`);
 }
 
 function launch(){
@@ -508,22 +613,30 @@ talking.</span>
                     *** ENDING: THE LINE STAYS WARM ***</span>
 
 <span class="sys">Final score: ${S.score} of 100 in ${S.moves} moves.
-There was a doctrine for this. Type RESTART to follow it.</span>`);
+There was a doctrine for this. Type RESTART to follow it — and
+this time, mean it.</span>`);
     return;
   }
   // good ending
-  S.over=true;S.won=true;
+  S.over=true;S.won=true;S.quake=0;
   award('launch',5,'Departure under doctrine');
   const card=S.hasCard?`
 
-Voss rides home in the cargo locker, cert card zipped in your
+Bartos rides home in the cargo locker, cert card zipped in your
 chest pocket, tether coiled the way he would have coiled it. The
 union will carry him the rest of the way. The union always does.`:'';
   const test=S.testDone?'':`
 
 (You never ran the repeater test. The board will isolate the core
 on your word alone. Your word will hold — this time.)`;
-  print(`<span class="alert">You release the clamps. Relay 26 falls away behind you, dark.
+  print(`<span class="alert">You slam the clamp release with the relay tearing itself apart
+over your canopy. The sled kicks free — and behind you, in
+perfect silence, a kilometer of mast folds like a closing hand
+around the place you were standing eight seconds ago.
+
+Relay 26 falls away behind you, dark and coming apart, and
+CONTAINED — the misalignment collapsing into its own severed
+geometry with nothing left to ride and nowhere left to go.
 
 Dark on purpose, this time. Dark with a tag on it, a severed
 umbilical, a flash report already crawling down the whisker at
@@ -541,17 +654,19 @@ never was.</span>${card}${test}
 
 Four days down the rail, Kepler Yard rises in your canopy, lit
 end to end, loud with docking chatter and tug exhaust and people.
-Tashi Tenzin is on the dock when you climb out. She looks at your
+Tashi Sokolova is on the dock when you climb out. She looks at your
 face, then at your paperwork, and signs it without a word.
 
 The hum of the yard closes over you. Sixty hertz. Honest.
 
 <span class="alert">═══════════════════════════════════════════════
-   INCIDENT IR-26-DARK — CONTAINED · DOCUMENTED
+   SIMULATION TS-26-DARK — COMPLETE
+   INCIDENT CONTAINED · DOCUMENTED · SURVIVED
+   CANDIDATE RATING: SEE BELOW · ITSYN ANRO DIV.
 ═══════════════════════════════════════════════</span>
 
 <span class="sys">Final score: ${S.score} / 100 in ${S.moves} moves.
-${S.score>=100?'Rating: EXEMPLARY. SafSyn will teach this incident.':S.score>=80?'Rating: CONTAINED. The doctrine held because you held it.':'Rating: SURVIVED. Out here, that is not nothing.'}
+${S.score>=100?'Rating: EXEMPLARY. Your run replaces the reference run. Cadets\nwill curse your name, which in ItSyn is a form of tenure.':S.score>=80?'Rating: CERTIFIED. The doctrine held because you held it.':'Rating: SURVIVED. Out here, that is not nothing. Requalify in 30.'}
 
 You keep the signals moving — and you decide which ones.
 
@@ -569,8 +684,8 @@ function go(dir){
   if(dest==='airlock'||dest==='sled'){
     if(S.o2<S.O2MAX){S.o2=S.O2MAX;print('<span class="sys">Your suit drinks from the recharge port. O₂ restored.</span>');}
   }
-  if(dest==='mast'&&!S.foundVoss){
-    S.foundVoss=true;
+  if(dest==='mast'&&!S.foundBartos){
+    S.foundBartos=true;
     print(roomText());
     award('voss',5,'Keeper located');
     dread(1);
@@ -581,7 +696,7 @@ function go(dir){
 
 function inventory(){
   const n={tag:'a red lockout tag, initialed',cutter:'a bonding cutter, charge full',
-    card:"Imre Voss's certification card",lamp:'a worklamp '+(S.lampOn?'(ON, '+S.lampJuice+' charge)':'(off, '+S.lampJuice+' charge)')};
+    card:"Imre Bartos's certification card",lamp:'a worklamp '+(S.lampOn?'(ON, '+S.lampJuice+' charge)':'(off, '+S.lampJuice+' charge)')};
   const inv=[];
   if(S.lampHave)inv.push(n.lamp);
   if(S.hasTag)inv.push(n.tag);
@@ -612,8 +727,8 @@ function examine(noun){
   if(/scratch|door|writing/.test(noun)&&r==='airlock'){
     print("Three words, gouged with a seal pick by someone whose hands knew\nexactly how much time they had: DON'T ANSWER IT.");return;
   }
-  if(/voss|keeper|body|him/.test(noun)&&r==='mast'){
-    print(`Imre Voss, Keeper Spec III, twenty-two years on the rail per the
+  if(/bartos|voss|keeper|body|him/.test(noun)&&r==='mast'){
+    print(`Imre Bartos, Keeper Spec III, twenty-two years on the rail per the
 service chevrons. His tether work is immaculate. His CERT CARD is
 visible in the suit's chest sleeve, where doctrine says it lives,
 so that whoever finds you can take you home.
@@ -626,7 +741,7 @@ down the rail while it still had a keeper to fight it.`);return;
   if(/clamp/.test(noun)&&r==='mast'){
     print('The manual phase clamp, frozen at seven-tenths. He held it eleven\nshifts past the end of his air. You do not understand the physics\nof that. You decide, carefully, never to ask anyone who might.');dread(1);return;
   }
-  if(/card/.test(noun)&&r==='mast'&&!S.hasCard){print("Voss's cert card, in the chest sleeve. TAKE it. Take him home.");return;}
+  if(/card/.test(noun)&&r==='mast'&&!S.hasCard){print("Bartos's cert card, in the chest sleeve. TAKE it. Take him home.");return;}
   if(/panel|breaker/.test(noun)&&r==='power'){print(ROOMS.power.desc());return;}
   if(/locker/.test(noun)&&r==='power'){
     print(S.lockerOpen?(S.hasCutter?'Shadow-boarded tools, all present, one outline empty where your\nbonding cutter used to hang.':'Open. Inside, among the shadow-boarded tools: a BONDING CUTTER,\ncharged.'):'A steel tool locker, latched. OPEN it.');return;
@@ -650,7 +765,11 @@ a reason.${S.tagged?'\nYour red tag hangs on the disconnect collar.':'\nThe disc
   if(/print|boot|frost/.test(noun)&&r==='core'){print('Boot prints in the frost, keeper-issue tread, circling the core at\na constant radius. Many laps. He stood here arguing with himself,\nand then he went up the mast, which tells you who won.');return;}
   if(/conduit|marking|nadiran/.test(noun)&&r==='crawl'){print('Beneath the Co-Op cladding, the old surface is worked with shallow\nrelief patterns that repeat almost. Your eye wants them to be\nmaintenance instructions. Your eye is an optimist.');return;}
   if(/array|dish/.test(noun)&&(r==='gantry'||r==='mast')){print('Hundreds of receivers and projectors, dead still. A relay this\nsize should sing — keepers sleep to it. The silence reads less\nlike OFF and more like LISTENING.');dread(0);return;}
-  if(/sled/.test(noun)){print('Your ride home. Rail-clamped, fueled, pressurized, and currently\nthe most beautiful object within four light-hours.');return;}
+  if(/^rail$|maintenance rail|clamps?$/.test(noun)&&(r==='gantry'||r==='mast')){
+    print(S.quake>0?'<span class="dead">The rail is alive with shear. You can feel it sorting through\nfrequencies, looking for yours. GET OFF IT.</span>':'The maintenance rail: a kilometer of cold steel your boot clamps\nand tether ride. Old railwalker wisdom, taught before your first\nEVA: in a railquake, the rail is not your anchor, it is the\ninstrument — and everything clipped to it is a string. If it ever\nstarts singing, get off before it decides what note you are.');
+    return;
+  }
+  if(/sled/.test(noun)){print('Your ride home. Rail-clamped on isolation mounts, fueled,\npressurized, and currently the most beautiful object within four\nlight-hours.');return;}
   print('You see nothing special — and out here, "nothing special" is a\nreading you have learned to cherish.');
 }
 
@@ -660,7 +779,7 @@ function readOrder(){
   award('order',5,'Dispatch acknowledged');
   print(`<span class="sys">══════ INCIDENT DISPATCH IR-26-DARK ══════
 ASSET:    Ansible Relay 26, Rail Segment K9
-STATUS:   No carrier 11 shifts. Keeper Voss: no contact.
+STATUS:   No carrier 11 shifts. Keeper Bartos: no contact.
 TASK:     1. Locate keeper.
           2. Restore main power. Assess.
           3. Run repeater verification (the experiment).
@@ -670,6 +789,12 @@ TASK:     1. Locate keeper.
           5. Report via whisker. Return.
 NOTE:     The relay is heritage hardware. Some parts are
           Nadiran. Some parts don't like being touched.
+WARNING:  Severance of an active anomaly may induce array
+          shear and structural loss of the relay. Do not
+          be aboard longer than necessary afterward. Shear
+          transmits through the maintenance rail; personnel
+          clipped to a resonating rail risk cardiac arrest.
+          Cross exposed sections without stopping.
 DOCTRINE: The relay goes dark so the rail stays clean.
 ═══════════════════════════════════════════</span>
 
@@ -681,7 +806,7 @@ function readLog(){
   S.readLog=true;
   award('log',10,'Keeper\'s log recovered');
   dread(1);
-  print(`The logbook, in Voss's careful block hand:
+  print(`The logbook, in Bartos's careful block hand:
 
 <span class="sys">SHIFT 3127.07 — Phase jitter on the inbound leg, 0.3 over spec.
 Logged. Filed maintenance request. Probably thermal.
@@ -708,7 +833,7 @@ Whoever reads this: the doctrine is in the dispatch. The core has
 one connection. That was never an engineering convenience.
 
 Don't answer it. It only wants the shape of you.
-                                              — I.V.</span>`);
+                                              — I.B.</span>`);
 }
 
 function takeItem(noun){
@@ -717,7 +842,7 @@ function takeItem(noun){
   if(/lamp/.test(noun)){
     if(r!=='deck'||S.lampHave){print(S.lampHave?'You have it.':'No lamp here.');return;}
     S.lampHave=true;award('lamp',5,'Worklamp acquired');
-    print('You lift the worklamp from the cradle. Full charge. Voss kept it\nready. Keepers keep things ready; it is most of the job.');return;
+    print('You lift the worklamp from the cradle. Full charge. Bartos kept it\nready. Keepers keep things ready; it is most of the job.');return;
   }
   if(/tag/.test(noun)){
     if(r!=='deck'){print('No tag here.');return;}
@@ -772,8 +897,20 @@ function breakers(cmd){
   if(/main/.test(cmd)&&/reset|close|on|flip/.test(cmd)){
     if(!S.mainTripped){print('MAIN BUS is already CLOSED.');return;}
     if(S.arrayOn){
+      S.badResets++;
+      if(S.badResets>=2){
+        die(`You close the main against a loaded array a second time, and the
+panel — which forgave you once, which was engineered to forgive
+you once — meets a fault current it was never rated to hold.
+
+The arc flash is white, then everything is.
+
+The stencil above the panel survives intact, unbothered, correct:
+SHED LOADS BEFORE RESET. It has buried better techs than you.`);
+        return;
+      }
       dread(1);
-      print('<span class="warn">You close the main with the array still loaded. The bus holds for\none full second — long enough for every speaker on the relay to\nproduce a single syllable that was not static — and trips again,\nhard, with a crack of contactors.\n\nSHED LOADS BEFORE RESET. The stencil was not decorating.</span>');return;
+      print('<span class="warn">You close the main with the array still loaded. The bus holds for\none full second — long enough for every speaker on the relay to\nproduce a single syllable that was not static — and trips again,\nhard, with a crack of contactors and a smell of scorched varnish.\n\nSHED LOADS BEFORE RESET. The stencil is not decorating. The panel\nforgave you once. Panels forgive once.</span>');return;
     }
     S.mainTripped=false;
     print('You reset the main. The bus closes clean. Glow strips surrender\nto real light down the corridor; the reactor note climbs from\nidle to duty. The relay is awake.');
@@ -799,8 +936,8 @@ And on the heels of the light, from the comms room, faint through
 the bulkhead — a voice. Calm. Procedural. Running an hourly
 check-in, the way keepers do.
 
-It is Voss's voice. Voss is on the mast.
-Voss has been on the mast for eleven shifts.`);
+It is Bartos's voice. Bartos is on the mast.
+Bartos has been on the mast for eleven shifts.`);
   }
 }
 
@@ -816,7 +953,7 @@ fool yet — and the loop unrolls into the room:
 "...Relay two-six, hourly, all parameters nominal, phase locked,
 keeper on station. Out."
 
-Voss. Pitch, pace, the dry little rest before "out." Perfect.
+Bartos. Pitch, pace, the dry little rest before "out." Perfect.
 Time-stamped this hour. The man holding the phase clamp on the
 mast has been dead for eleven shifts and is currently, in this
 room, telling the rail that everything is fine.
@@ -839,7 +976,7 @@ now, your division codes. It has had hours of you, through the
 hull, through your boot magnets, through every tap and breath.
 
 "Relay two-six," it says, in a voice that is no longer entirely
-Voss's, "hourly. Go ahead."
+Bartos's, "hourly. Go ahead."
 
 It is leaving you space to ANSWER. The door in the airlock told
 you the only thing that matters. Tag. Cut. Walk away.</span>`);
@@ -866,7 +1003,7 @@ yourself, the way you watch someone else's hand slip on a ladder.
 
 The loop comes back wearing your whole callsign now, your division
 code, the dry little rest before "out" — except the rest is
-Voss's and the "out" is yours and the seam between them is
+Bartos's and the "out" is yours and the seam between them is
 becoming very hard to hear.
 
 ONE more word into that carrier and there will be no seam at all.</span>`);
@@ -916,7 +1053,7 @@ function cutUmb(){
   if(S.severed){print('Done. Cut. Closed. The stump is capped and the cap is staying.');return;}
   if(!S.hasCutter){print('Your gloves are rated for many things. Armored trunk is not on\nthe list. The power-room locker had a bonding cutter.');return;}
   if(!S.tagged){print('<span class="warn">No. Tag first. Not because anyone will reset this line in the\nnext five minutes — because the order of operations is the only\nthing out here that is entirely on your side.</span>');return;}
-  S.severed=true;
+  S.severed=true;S.quake=13;
   award('sever',15,'Sacrificial containment executed');
   print(`You seat the cutter on the trunk, two-handed, and squeeze.
 
@@ -926,14 +1063,21 @@ the cut the loop, three rooms away, stops.
 
 Not at the end of a sentence. In the middle of a word. Your word.
 
-The cut completes. The capped stump swings free. The core sits in
-your lamplight, one connection short of everything, and the cold
-in the room changes from a pressure to a fact — present, sealed,
-LOCAL. Contained the way Voss spent his last eleven shifts trying
-to contain it, with one improvement: you get to leave.
+The cut completes. The stump swings free — and the relay SCREAMS.
 
-<span class="sys">The whisker antenna is independent of the array. SEND REPORT from
-comms, then get to your sled.</span>`);
+Not sound. Structure. The misalignment, cut off from the rail,
+collapses inward on the only geometry left to it: this one. Deck
+plates ripple. The frost leaps. Down the kilometer of spine you
+hear — feel — girders begin, one by one, to change their minds
+about being girders.
+
+<span class="dead">ARRAY SHEAR IN PROGRESS. THE RELAY IS COMING OFF THE RAIL.</span>
+
+<span class="sys">The whisker is independent of the array — SEND REPORT from comms
+if you have the nerve to spend the seconds. Either way: SLED.
+LAUNCH. The STRUCTURAL counter is your life expectancy — and out
+on the gantry the rail itself is carrying the shear. Cross it
+fast. Do not linger clipped to a singing rail.</span>`);
 }
 
 function touchCore(){
@@ -982,8 +1126,21 @@ its patience is the worst part: it is the patience of something
 that has already measured the delay and knows which direction it
 is shrinking.</span>`);
   } else {
+    S.taps++;
+    if(S.taps>=2){
+      die(`Tap-tap, you send, one time too many.
+
+Tap-tap, the conduit replies — simultaneous. On top of your own.
+Inside it.
+
+The delay has reached zero, and you are inside, which is the one
+configuration Bartos's log was written to prevent. The crawlway
+does not change. Nothing changes. It is only that from this
+moment the taps continue, on schedule, without requiring you.`);
+      return;
+    }
     dread(1);
-    print('<span class="warn">Tap-tap. The reply comes back with almost no delay at all.\nVoss\'s log, shift ten: "when the delay reaches zero I do not\nintend to be inside." Stop. Tapping.</span>');
+    print('<span class="warn">Tap-tap. The reply lands almost on top of your own — the delay is\nnearly gone. Bartos, shift ten: "when the delay reaches zero I do\nnot intend to be inside." One more tap and you will be the\ncounterexample.</span>');
   }
 }
 
@@ -993,11 +1150,11 @@ function sendReport(){
   if(!S.severed){print('<span class="warn">You queue the report. The whisker shows BLOCKED — the main array\nis squatting on the carrier, and you have a strengthening\nsuspicion about what, exactly, is doing the squatting. Nothing\nleaves this relay until the core has nothing to say. Tag. Cut.</span>');return;}
   if(S.reportSent){print('Sent. Crawling home at light-speed, the honest way.');return;}
   S.reportSent=true;
-  award('report',5,'Incident documented for the rail');
+  award('report',5,'Incident documented for the rail — under fire');
   print(`You key the report into the whisker queue:
 
 <span class="sys">  IR-26-DARK · FLASH
-  KEEPER VOSS: DECEASED ON STATION. DIED HOLDING PHASE.
+  KEEPER BARTOS: DECEASED ON STATION. DIED HOLDING PHASE.
   ANOMALY: VERIFIED${S.testDone?' BY REPEATER EXPERIMENT':' BY OBSERVATION'} — ACTIVE, IMITATIVE,
   PROPAGATION RISK TO RAIL.
   ACTION: SAFMOD SACRIFICIAL CONTAINMENT. UMBILICAL TAGGED
@@ -1005,11 +1162,11 @@ function sendReport(){
   RELAY 26 DARK BY DESIGN. ROUTE AROUND. SEND SAFSYN.
   — RELAY TECH, ANRO DIV.</span>
 
-TRANSMITTING — four light-hours to the first ear. Slow. Real.
-Yours. The first honest signal off this relay in eleven shifts,
-and it travels at the only speed you currently trust.
+TRANSMITTING — the whisker spits it out between shudders, four
+light-hours to the first ear, at the only speed you still trust.
+The deck kicks under you as the queue clears.
 
-<span class="sys">Now: your sled. LAUNCH when aboard.</span>`);
+<span class="dead">Done. SLED. NOW.</span>`);
 }
 
 function help(){
@@ -1025,11 +1182,21 @@ The core:  TAG UMBILICAL · CUT UMBILICAL · (TOUCH CORE — don't)
 Leaving:   LAUNCH (from the sled)
 Meta:      SCORE · RESTART
 
-In vacuum your O₂ ticks every move. Recharge at the airlock or
-sled. The CARRIER meter is how much of you the line has heard.
-Keep it low. Keep yourself singular.
+THE WAYS THIS ENDS BADLY (a partial list): O₂ at zero. Two turns
+unlit in the deep sections. A CARRIER meter that fills — every
+listen, tap, touch, and answer feeds it, and at 8 the delay
+reaches zero with you inside. Answering three times. Touching the
+core twice. Abusing the breaker panel twice. And once you cut the
+umbilical, the relay starts coming off the rail — the STRUCTURAL
+counter is your remaining moves to reach the sled and LAUNCH,
+and the rail itself carries the shear: three consecutive turns
+clipped to it outside during the collapse and the vibration will
+find your heart's frequency and stop it.
 
-Doctrine: One connection point. Tag it. Cut it. Walk away.</span>`);
+Recharge O₂ at the airlock or sled. Keep the meter low. Keep
+yourself singular.
+
+Doctrine: One connection point. Tag it. Cut it. Walk away. FAST.</span>`);
 }
 
 /* ---------------- dispatch ---------------- */
