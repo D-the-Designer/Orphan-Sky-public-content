@@ -3,17 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DEAD CARRIER — An ItSyn Training Simulation</title>
+<title>DEAD CARRIER: An Orphan Sky Story</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+
+/* === OCR TERMINAL UPGRADE ===
+This file has been prepared for conversion to the final Infocom-inspired
+terminal aesthetic. Remaining hand-authored narrative/layout changes are
+tracked in the project notes:
+ - Railwalker terminology
+ - MCT-88 "Heavy Favor"
+ - Maintenance Bee transport arrival
+ - Field Rise mechanics
+ - OCR header layout
+ - CRT phosphor styling
+*/
+
   :root{
-    --orange:#FF6A00;
-    --coal:#0D0D0D;
-    --void:#05070C;
+    --orange:#6CFF6C;
+    --coal:#001400;
+    --void:#000800;
     --navy:#0A1220;
-    --paper:#C8C8BF;
+    --paper:#73ff73;
     --dim:#6E6E66;
-    --teal:#2E8C8C;
+    --teal:#73ff73;
     --hazard:#E8B400;
     --blood:#B03020;
   }
@@ -21,7 +34,7 @@
   body{
     background:var(--void);
     color:var(--paper);
-    font-family:"IBM Plex Mono","Courier New",monospace;
+    font-family:"Courier New", monospace;
     font-size:15px;
     line-height:1.55;
     display:flex;flex-direction:column;height:100dvh;
@@ -87,23 +100,60 @@
     #plate .docid{display:none}
     #status{flex-wrap:wrap}
   }
+
+body{
+ text-shadow:0 0 4px rgba(120,255,120,.45);
+}
+#screen{
+ background:#001000;
+ border:2px solid #2aff2a;
+ box-shadow:0 0 30px rgba(0,255,0,.2) inset;
+}
+#screen::before{
+ content:"";
+ position:fixed;
+ inset:0;
+ pointer-events:none;
+ background:repeating-linear-gradient(
+   to bottom,
+   rgba(255,255,255,.03) 0px,
+   rgba(255,255,255,.03) 1px,
+   transparent 2px,
+   transparent 4px
+ );
+ mix-blend-mode:screen;
+}
+
+
+body{
+ background:#001000;
+ color:#63ff63;
+ font-family:"Courier New",monospace;
+ text-shadow:0 0 6px rgba(80,255,80,.5);
+}
+#screen{
+ border:none !important;
+ box-shadow:none !important;
+ padding:20px;
+ max-width:80ch;
+ margin:0 auto;
+}
+#screen::after{display:none!important;}
+#inputrow{
+ border-top:none!important;
+ background:#001000!important;
+ max-width:80ch;
+ margin:0 auto;
+ padding-top:0;
+}
+.caret{animation:blink 1s steps(1) infinite;}
+@keyframes blink{50%{opacity:0}}
+
 </style>
 </head>
 <body>
 
-<header id="plate">
-  <div class="mark"><span class="it">IT</span><span class="syn">SYN</span></div>
-  <div class="sub">Intersystem Transport Syndicate · Training Division · Difficulty: You Can Die</div>
-  <div class="docid">TRAINING SIM <b>TS-26-DARK</b>CLASS: EXPERT · FATAL</div>
-  <div class="stripe"></div>
-</header>
 
-<div id="status">
-  <span class="loc" id="st-loc">RAIL SLED</span>
-  <span id="st-o2"></span>
-  <span id="st-car"></span>
-  <span><span id="st-score">Score: 0</span> · <span id="st-moves">Moves: 0</span></span>
-</div>
 
 <main id="screen" aria-live="polite"></main>
 
@@ -180,16 +230,16 @@ Keeper on station.`);
   }
 }
 function bar(){
-  $loc.textContent=ROOMS[S.room].name;
-  $score.textContent='Score: '+S.score;
-  $moves.textContent='Moves: '+S.moves;
+  if($loc)$loc.textContent=ROOMS[S.room].name;
+  if($score)$score.textContent='Score: '+S.score;
+  if($moves)$moves.textContent='Moves: '+S.moves;
   if(VACUUM.has(S.room)){
-    $o2.textContent='O₂: '+'▮'.repeat(S.o2)+'▯'.repeat(S.O2MAX-S.o2);
-    $o2.className=S.o2<=4?'low':'';
-  } else $o2.textContent='';
+    if($o2)$o2.textContent='O₂: '+'▮'.repeat(S.o2)+'▯'.repeat(S.O2MAX-S.o2);
+    if($o2)$o2.className=S.o2<=4?'low':'';
+  } else if($o2)$o2.textContent='';
   let c='';
   for(let i=0;i<8;i++)c+=i<S.carrier?'<span class="on">▮</span>':'<span class="off">▯</span>';
-  $car.innerHTML=S.quake>0?'<span class="on">STRUCTURAL: '+S.quake+'</span>':'CARRIER: '+c;
+  if($car)$car.innerHTML=S.quake>0?'<span class="on">STRUCTURAL: '+S.quake+'</span>':'CARRIER: '+c;
 }
 function lit(){
   if(VACUUM.has(S.room))return true;            // suit lamp ring / starlight
@@ -404,7 +454,15 @@ SOUTH, and you should.`];
 
 /* ---------------- intro ---------------- */
 function intro(){
-  print(`<span class="sys">ITSYN TRAINING DIVISION · SIMULATION TS-26 "DEAD CARRIER"
+  print(`ITSYN FIELD TERMINAL V3.4
+RELAY 26
+========================================
+<span class="alert">DEAD CARRIER: AN ORPHAN SKY STORY</span>
+========================================
+LOCATION: RAIL SLED
+STATUS: OFFLINE
+
+<span class="sys">ITSYN TRAINING DIVISION · SIMULATION TS-26 "DEAD CARRIER"
 Reconstructed from Incident IR-26-DARK, Ansible Relay Network
 Operations. Candidates are evaluated on doctrine, air discipline,
 and survival. PROCEDURE IS SURVIVAL.
